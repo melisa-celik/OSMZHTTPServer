@@ -1,10 +1,8 @@
 package com.example.osmzhttpserver;
-
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Environment;
@@ -18,15 +16,14 @@ import android.os.Message;
 import java.io.File;
 import android.widget.TextView;
 
-
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
-
     private static final String TAG = "HttpServer";
     private SocketServer s;
     private static final int READ_EXTERNAL_STORAGE = 1;
     private static final int REQUEST_READ_EXTERNAL_STORAGE = 1;
     private static final int MAX_THREADS = 5;
     private TextView logTextView;
+
     private Handler handler = new Handler(Looper.getMainLooper()) {
         public void handleMessage(@NonNull android.os.Message msg) {
             String event = (String) msg.obj;
@@ -38,15 +35,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
         logTextView = findViewById(R.id.logTextView);
-
         Button btn1 = findViewById(R.id.button1);
         Button btn2 = findViewById(R.id.button2);
-
         btn1.setOnClickListener(this);
         btn2.setOnClickListener(this);
-
         if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
@@ -64,7 +57,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void changeFilePermissions() {
-        File file = new File(Environment.getExternalStorageDirectory(), "Documents/index.html");
+        File file = new File(Environment.getExternalStorageDirectory(), "index.html");
         if (file.exists()) {
             file.setReadable(true);
             file.setWritable(true);
@@ -91,8 +84,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
-
-// Because I always encountered Error serving file: Permission denied error, I added the following code to the MainActivity.java file using AI - although I am ashamed to admit that, so sorry:
+    // Because I always encountered Error serving file: Permission denied error, I added the following code to the MainActivity.java file using AI - although I am ashamed to admit that, so sorry:
 //    @Override
 //    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
 //        super.onRequestPermissionsResult(requestCode, permissions, grantResults);

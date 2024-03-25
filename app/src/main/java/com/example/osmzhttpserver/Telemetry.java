@@ -1,5 +1,4 @@
 package com.example.osmzhttpserver;
-
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
@@ -13,12 +12,9 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
-
 import androidx.core.app.ActivityCompat;
-
 import org.json.JSONException;
 import org.json.JSONObject;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.Socket;
@@ -34,7 +30,6 @@ public class Telemetry implements LocationListener, SensorEventListener {
     private Map<String, Object> data;
     private Handler handler;
     private Runnable updateTelemetryRunnable;
-
     private static final String TAG = "Telemetry";
 
     public Telemetry(Context context, Handler handler) {
@@ -44,7 +39,6 @@ public class Telemetry implements LocationListener, SensorEventListener {
         registerSensorListeners();
         data = new HashMap<>();
         startLocationUpdates();
-
         updateTelemetryRunnable = new Runnable() {
             @Override
             public void run() {
@@ -61,6 +55,7 @@ public class Telemetry implements LocationListener, SensorEventListener {
         Message message = handler.obtainMessage(1, json.toString());
         message.sendToTarget();
     }
+
     private void registerSensorListeners() {
         Sensor accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         Sensor gyro = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
@@ -189,5 +184,4 @@ public class Telemetry implements LocationListener, SensorEventListener {
     public Map<String, Object> getTelemetryDataMap() {
         return data;
     }
-
 }

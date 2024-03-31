@@ -1,13 +1,18 @@
 package com.example.osmzhttpserver;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -33,6 +38,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private SocketServer s;
     private static final int READ_EXTERNAL_STORAGE = 1;
     private static final int REQUEST_READ_EXTERNAL_STORAGE = 1;
+
+    private static final int REQUEST_CAMERA_PERMISSION = 101;
+
     private static final int MAX_THREADS = 5;
     private TextView logTextView;
 
@@ -63,6 +71,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             ActivityCompat.requestPermissions(this,
                     new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE},
                     REQUEST_READ_EXTERNAL_STORAGE);
+        }
+        else if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestCameraPermission();
         } else {
             initializeCamera();
             initializeServer();
@@ -71,6 +83,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         if (!checkCameraHardware(this)) {
             Log.e(TAG, "No camera found.");
         }
+    }
+
+    private void requestCameraPermission() {
+        ActivityCompat.requestPermissions(this,
+                new String[]{Manifest.permission.CAMERA},
+                REQUEST_CAMERA_PERMISSION);
     }
 
     private void initializeCamera() {
@@ -186,13 +204,41 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_READ_EXTERNAL_STORAGE) {
+        if (requestCode == REQUEST_CAMERA_PERMISSION | requestCode == REQUEST_READ_EXTERNAL_STORAGE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                initializeCamera();
                 initializeServer();
             } else {
-                Log.e(TAG, "Permission denied.");
+                showPermissionDeniedDialog();
             }
         }
+    }
+
+
+    private void showPermissionDeniedDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Permission Denied")
+                .setMessage("Without camera permission, this app cannot function properly. Please grant the permission.")
+                .setPositiveButton("Grant", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        openAppSettings();
+                    }
+                })
+                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        finish();
+                    }
+                })
+                .show();
+    }
+
+    private void openAppSettings() {
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", getPackageName(), null));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
     }
 
     @Override

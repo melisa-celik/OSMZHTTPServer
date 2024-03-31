@@ -1,5 +1,6 @@
 package com.example.osmzhttpserver;
 import android.content.Context;
+import android.hardware.Camera;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
@@ -21,6 +22,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 
 public class SocketServer extends Thread {
@@ -34,10 +37,18 @@ public class SocketServer extends Thread {
     private static final String SERVER_ROOT = "/";
     private static final String DEFAULT_PAGE = "index.html";
 
-    public SocketServer(int maxThreads, Handler handler, Context context) {
+    private static final String BOUNDARY = "OSMZ_BOUNDARY";
+
+    private ExecutorService executorService;
+
+    private Camera mCamera;
+
+    public SocketServer(int maxThreads, Handler handler, Context context, Camera camera) {
         this.threadSemaphore = new Semaphore(maxThreads);
         this.handler = handler;
         this.context = context;
+        this.executorService = Executors.newFixedThreadPool(maxThreads);
+        this.mCamera = camera;
     }
 
     public void close() {
@@ -98,13 +109,8 @@ public class SocketServer extends Thread {
             if (requestParts.length >= 2) {
                 String method = requestParts[0];
                 String path = requestParts[1];
-                if (path.startsWith("/cmd/")) {
-                    String command = path.substring(5);
-                    executeCommand(output, command);
-                } else if (isDirectory(path)) {
-                    serveDirectory(output, path);
-                } else {
-                    serveFile(output, path);
+                if (path.equals("/camera/stream")) {
+                    serveMJPEGStream(output);
                 }
             } else {
                 sendErrorResponse(output, 404, "Not Found");
@@ -118,8 +124,39 @@ public class SocketServer extends Thread {
             Log.d("SERVER", "Socket Closed");
         } catch (IOException e) {
             Log.e(TAG, "Error handling request: " + e.getMessage());
+        }
+    }
+
+    private void serveMJPEGStream(OutputStream output) {
+        try {
+            sendResponseHeader(output, 200, "multipart/x-mixed-replace; boundary=OSMZ_boundary");
+
+            while (true) {
+                ByteArrayOutputStream jpegStream = new ByteArrayOutputStream();
+
+                // Capture JPEG image
+                if (mCamera != null) {
+                    mCamera.takePicture(null, null, new Camera.PictureCallback() {
+                        @Override
+                        public void onPictureTaken(byte[] data, Camera camera) {
+                            try {
+                                jpegStream.write("--OSMZ_boundary\r\n".getBytes());
+                                jpegStream.write("Content-Type: image/jpeg\r\n\r\n".getBytes());
+                                jpegStream.write(data);
+                                jpegStream.write("\r\n".getBytes());
+                                output.write(jpegStream.toByteArray());
+                                output.flush();
+                                jpegStream.reset();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    });
+                }
+                Thread.sleep(333);
+            }
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
         }
     }
 

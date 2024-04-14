@@ -20,6 +20,8 @@ import android.Manifest;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -43,6 +45,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private static final int MAX_THREADS = 5;
     private TextView logTextView;
+    private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
 
     private Camera mCamera;
     private CameraPreview mPreview;
@@ -75,7 +78,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         else if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
             requestCameraPermission();
-        } else {
+        }
+        else if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
+        }else {
             initializeCamera();
             initializeServer();
         }
@@ -92,6 +98,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void initializeCamera() {
+        mCamera = Camera.open();
+//        CameraPreview cameraPreview = findViewById(R.id.camera_preview);
+//        cameraPreview.startPreview();
         // Check if the device has a camera
         if (!checkCameraHardware(this)) {
             Log.e(TAG, "No camera found.");
@@ -101,20 +110,42 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         // Create an instance of Camera
         mCamera = getCameraInstance();
         if (mCamera != null) {
-            // Create our Preview view and set it as the content of our activity.
             mPreview = new CameraPreview(this, mCamera);
             FrameLayout preview = findViewById(R.id.camera_preview);
             preview.addView(mPreview);
+            mPreview.startPreview();
 
-            Timer timer = new Timer();
             TimerTask timerTask = new TimerTask() {
                 @Override
                 public void run() {
                     if (mCamera != null) {
-                        mCamera.takePicture(null, null, mPicture);
+                        mCamera.takePicture(null, null, new Camera.PictureCallback() {
+                            @Override
+                            public void onPictureTaken(byte[] data, Camera camera) {
+                                try {
+//                                    jpegStream.write("--OSMZ_boundary\r\n".getBytes());
+//                                    jpegStream.write("Content-Type: image/jpeg\r\n\r\n".getBytes());
+//                                    jpegStream.write(data);
+//                                    jpegStream.write("\r\n".getBytes());
+//                                    output.write(jpegStream.toByteArray());
+//                                    output.flush();
+//                                    jpegStream.reset();
+                                    mCamera.startPreview();
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        });
+                    }
+                    try {
+                        Thread.sleep(333);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
                     }
                 }
             };
+
+            Timer timer = new Timer();
             timer.schedule(timerTask, 5000, 1000);
         } else {
             Log.e(TAG, "Failed to initialize camera.");
@@ -204,7 +235,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_CAMERA_PERMISSION | requestCode == REQUEST_READ_EXTERNAL_STORAGE) {
+        if (requestCode == REQUEST_CAMERA_PERMISSION | requestCode == REQUEST_READ_EXTERNAL_STORAGE | requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 initializeCamera();
                 initializeServer();

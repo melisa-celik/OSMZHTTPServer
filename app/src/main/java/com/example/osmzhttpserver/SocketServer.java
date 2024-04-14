@@ -10,6 +10,7 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -110,7 +111,7 @@ public class SocketServer extends Thread {
                 String method = requestParts[0];
                 String path = requestParts[1];
                 if (path.equals("/camera/stream")) {
-                    serveMJPEGStream(output);
+//                    serveMJPEGStream(output);
                 }
             } else {
                 sendErrorResponse(output, 404, "Not Found");
@@ -127,35 +128,62 @@ public class SocketServer extends Thread {
         }
     }
 
-    private void serveMJPEGStream(OutputStream output) {
+    private void serveMJPEGStream(Socket clientSocket) {
         try {
-            sendResponseHeader(output, 200, "multipart/x-mixed-replace; boundary=OSMZ_boundary");
+            OutputStream outputStream = clientSocket.getOutputStream();
+            DataOutputStream dataOutputStream = new DataOutputStream(outputStream);
+
+//            sendResponseHeader(output, 200, "multipart/x-mixed-replace; boundary=OSMZ_boundary");
 
             while (true) {
-                ByteArrayOutputStream jpegStream = new ByteArrayOutputStream();
+//                ByteArrayOutputStream jpegStream = new ByteArrayOutputStream();
+                // Capture frame
+                final byte[][] frameData = {new byte[1024]};
+                mCamera = Camera.open();
+                mCamera.setPreviewCallback(new Camera.PreviewCallback() {
+                    @Override
+                    public void onPreviewFrame(byte[] data, Camera camera) {
+                        frameData[0] = data;
+                    }
+                });
 
-                // Capture JPEG image
-                if (mCamera != null) {
-                    mCamera.takePicture(null, null, new Camera.PictureCallback() {
-                        @Override
-                        public void onPictureTaken(byte[] data, Camera camera) {
-                            try {
-                                jpegStream.write("--OSMZ_boundary\r\n".getBytes());
-                                jpegStream.write("Content-Type: image/jpeg\r\n\r\n".getBytes());
-                                jpegStream.write(data);
-                                jpegStream.write("\r\n".getBytes());
-                                output.write(jpegStream.toByteArray());
-                                output.flush();
-                                jpegStream.reset();
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                    });
-                }
-                Thread.sleep(333);
+                String header = "HTTP/1.0 200 OK\r\n"
+                        + "Server: NanoHTTPD/2.0\r\n"
+                        + "Content-Type: multipart/x-mixed-replace; boundary=--MJPG\r\n"
+                        + "\r\n";
+
+                // Write header
+                outputStream.write(header.getBytes());
+
+                // Write MJPEG frame
+                dataOutputStream.writeBytes("--MJPG\r\n");
+                dataOutputStream.writeBytes("Content-Type: image/jpeg\r\n");
+                dataOutputStream.writeBytes("Content-Length: " + frameData[0].length + "\r\n");
+                dataOutputStream.writeBytes("\r\n");
+                dataOutputStream.write(frameData[0]);
+                dataOutputStream.writeBytes("\r\n");
+
+//                if (mCamera != null) {
+//                    mCamera.takePicture(null, null, new Camera.PictureCallback() {
+//                        @Override
+//                        public void onPictureTaken(byte[] data, Camera camera) {
+//                            try {
+//                                jpegStream.write("--OSMZ_boundary\r\n".getBytes());
+//                                jpegStream.write("Content-Type: image/jpeg\r\n\r\n".getBytes());
+//                                jpegStream.write(data);
+//                                jpegStream.write("\r\n".getBytes());
+//                                output.write(jpegStream.toByteArray());
+//                                output.flush();
+//                                jpegStream.reset();
+//                            } catch (IOException e) {
+//                                e.printStackTrace();
+//                            }
+//                        }
+//                    });
+//                }
+//                Thread.sleep(333);
             }
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }

@@ -31,7 +31,7 @@ public class  SocketServer extends Thread {
     public final int port = 12345;
     boolean bRunning;
     private static final String SERVER_ROOT = "/";
-    private static final String DEFAULT_PAGE = "index.html";
+    private static final String DEFAULT_PAGE = "telemetry.html";
     private Handler handler;
     private Semaphore threadSemaphore;
     private TelemetryDataCollector telemetryDataCollector;
@@ -223,7 +223,7 @@ public class  SocketServer extends Thread {
 
 
 
-    private void handleTelemetryRequest(OutputStream output) throws IOException {
+    private void handleTelemetryRequest(OutputStream output) {
         try {
             JSONObject telemetryData = telemetryDataCollector.collectTelemetryData();
             if (telemetryData != null) {

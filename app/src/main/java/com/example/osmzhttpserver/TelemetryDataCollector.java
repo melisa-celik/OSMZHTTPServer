@@ -122,7 +122,6 @@ public class TelemetryDataCollector {
     public JSONObject collectTelemetryData() {
         JSONObject telemetryJson = new JSONObject();
         try {
-            // Get GPS location
             Location lastLocation = fusedLocationClient.getLastLocation().getResult();
             if (lastLocation != null) {
                 double latitude = lastLocation.getLatitude();
@@ -130,9 +129,6 @@ public class TelemetryDataCollector {
                 telemetryJson.put("latitude", latitude);
                 telemetryJson.put("longitude", longitude);
             }
-
-            // Add other telemetry data (e.g., sensor data) to the JSONObject
-
             return telemetryJson;
         } catch (JSONException | SecurityException e) {
             Log.e(TAG, "Error collecting telemetry data: " + e.getMessage());

@@ -68,7 +68,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void changeFilePermissions() {
-        File file = new File(Environment.getExternalStorageDirectory(), "index.html");
+        File file = new File(Environment.getExternalStorageDirectory(), "telemetry.html");
         if (file.exists()) {
             file.setReadable(true);
             file.setWritable(true);

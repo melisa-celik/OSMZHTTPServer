@@ -33,8 +33,8 @@ public class  SocketServer extends Thread {
     private Semaphore threadSemaphore;
 
     public SocketServer(int maxThread, Handler handler) {
-        this.handler = handler;
         threadSemaphore = new Semaphore(maxThread);
+        this.handler = handler;
     }
 
     public void close() {
@@ -66,8 +66,9 @@ public class  SocketServer extends Thread {
                     public void run() {
                         try {
                             handleRequest(s);
-                        } finally {
                             threadSemaphore.release();
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error handling request: " + e.getMessage());
                         }
                     }
                 }).start();

@@ -60,7 +60,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private void initializeServer() {
         if (s == null) {
             changeFilePermissions();
-            s = new SocketServer(MAX_THREADS, handler);
+            s = new SocketServer(MAX_THREADS, handler, getApplicationContext());
             s.start();
         } else {
             Log.d(TAG, "Server is already running.");

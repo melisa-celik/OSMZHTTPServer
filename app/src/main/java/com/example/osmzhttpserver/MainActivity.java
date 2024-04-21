@@ -8,10 +8,14 @@ import androidx.core.content.ContextCompat;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.Manifest;
+import android.widget.TextView;
 
 import java.io.File;
 
@@ -21,6 +25,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private SocketServer s;
     private static final int READ_EXTERNAL_STORAGE = 1;
     private static final int REQUEST_READ_EXTERNAL_STORAGE = 1;
+    private static TextView logTextView;
+    private static final int MAX_THREADS = 5;
+    private static Handler handler = new Handler(Looper.getMainLooper()) {
+        public void handleMessage(@NonNull android.os.Message msg) {
+            String event = (String) msg.obj;
+            appendLog(event);
+            sendMessageToHandler(event);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -29,6 +42,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         Button btn1 = (Button)findViewById(R.id.button1);
         Button btn2 = (Button)findViewById(R.id.button2);
+        logTextView = findViewById(R.id.logTextView);
 
         btn1.setOnClickListener(this);
         btn2.setOnClickListener(this);
@@ -44,9 +58,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void initializeServer() {
-        changeFilePermissions();
-        s = new SocketServer();
-        s.start();
+        if (s == null) {
+            changeFilePermissions();
+            s = new SocketServer(MAX_THREADS, handler);
+            s.start();
+        } else {
+            Log.d(TAG, "Server is already running.");
+        }
     }
 
     private void changeFilePermissions() {
@@ -77,6 +95,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
+    static void sendMessageToHandler(String message) {
+        Message msg = handler.obtainMessage();
+        msg.obj = message;
+        handler.sendMessage(msg);
+    }
+
+    private static void appendLog(String event) {
+        if (logTextView != null) {
+            logTextView.append("\n" + event);
+        }
+    }
 
 // Because I always encountered Error serving file: Permission denied error, I added the following code to the MainActivity.java file using AI - although I am ashamed to admit that, so sorry:
 //    @Override
@@ -117,6 +146,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+            s = null;
         }
     }
 

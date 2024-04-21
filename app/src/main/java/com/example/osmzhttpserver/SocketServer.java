@@ -1,6 +1,7 @@
 package com.example.osmzhttpserver;
 
 import android.os.Environment;
+import android.os.Handler;
 import android.util.Log;
 import android.webkit.MimeTypeMap;
 
@@ -19,16 +20,22 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
+import java.util.concurrent.Semaphore;
 
 public class  SocketServer extends Thread {
     private static final String TAG = "HttpServer";
     ServerSocket serverSocket;
     public final int port = 12345;
     boolean bRunning;
-
     private static final String SERVER_ROOT = "/";
-
     private static final String DEFAULT_PAGE = "index.html";
+    private Handler handler;
+    private Semaphore threadSemaphore;
+
+    public SocketServer(int maxThread, Handler handler) {
+        this.handler = handler;
+        threadSemaphore = new Semaphore(maxThread);
+    }
 
     public void close() {
         try {
@@ -52,12 +59,20 @@ public class  SocketServer extends Thread {
                 Socket s = serverSocket.accept();
                 Log.d("SERVER", "Socket Accepted");
 
-                handleRequest(s);
+                threadSemaphore.acquire();
 
-                s.close();
+                new Thread(() -> {
+                    try {
+                        handleRequest(s);
+                    } finally {
+                        threadSemaphore.release();
+                    }
+                }).start();
+
+//                s.close();
                 Log.d("SERVER", "Socket Closed");
             }
-        } catch (IOException e) {
+        } catch (IOException | InterruptedException e) {
             if (serverSocket != null && serverSocket.isClosed())
                 Log.d("SERVER", "Normal exit");
             else {
@@ -73,9 +88,16 @@ public class  SocketServer extends Thread {
 
     private void handleRequest(Socket s) {
         try {
+            if (!threadSemaphore.tryAcquire()) {
+                sendErrorResponse(s.getOutputStream(), 503, "Server too busy");
+                s.close();
+                return;
+            }
+
             BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream()));
             OutputStream out = s.getOutputStream();
             String request = in.readLine();
+            String event = null;
 
             if (request != null && request.trim().length() > 0) {
                 Log.d(TAG, "Request: " + request);
@@ -117,9 +139,19 @@ public class  SocketServer extends Thread {
 
                 byte[] fileData = readFileData(file);
                 sendResponse(out, 200, "OK", mimeType, fileData);
+
+                event = "File " + file.getAbsolutePath() + " served";
+                MainActivity.sendMessageToHandler(event);
             }
         } catch (IOException e) {
             Log.e(TAG, "Error handling request: " + e.getMessage());
+        } finally {
+            try {
+                s.close();
+                threadSemaphore.release();
+            } catch (IOException e) {
+                Log.e(TAG, "Error closing socket: " + e.getMessage());
+            }
         }
     }
 

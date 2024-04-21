@@ -1,24 +1,19 @@
 package com.example.osmzhttpserver;
 
-import android.icu.number.NumberFormatter;
 import android.os.Environment;
 import android.util.Log;
 import android.webkit.MimeTypeMap;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -76,34 +71,73 @@ public class  SocketServer extends Thread {
         }
     }
 
-    private void handleRequest(Socket clientSocket) {
+    private void handleRequest(Socket s) {
         try {
-            BufferedInputStream input = new BufferedInputStream(clientSocket.getInputStream());
-            OutputStream output = new BufferedOutputStream(clientSocket.getOutputStream());
+            BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream()));
+            OutputStream out = s.getOutputStream();
+            String request = in.readLine();
 
-            StringBuilder request = new StringBuilder();
-            int nextChar;
-            while ((nextChar = input.read()) != -1) {
-                request.append((char) nextChar);
-                if (request.toString().endsWith("\r\n\r\n")) {
-                    break;
+            if (request != null && request.trim().length() > 0) {
+                Log.d(TAG, "Request: " + request);
+
+                String[] tokens = request.split(" ");
+                if (tokens.length < 2) {
+                    Log.e(TAG, "Invalid request: " + request);
+                    return;
                 }
+
+                String method = tokens[0];
+                String uri = tokens[1];
+
+                if (!method.equalsIgnoreCase("GET")) {
+                    Log.e(TAG, "Unsupported method: " + method);
+                    sendErrorResponse(out, 501, "Not Implemented");
+                    return;
+                }
+
+                File file = new File(Environment.getExternalStorageDirectory(), uri);
+                if (!file.exists()) {
+                    Log.e(TAG, "File not found: " + file.getAbsolutePath());
+                    sendErrorResponse(out, 404, "Not Found");
+                    return;
+                }
+
+                if (file.isDirectory()) {
+                    file = new File(file, DEFAULT_PAGE);
+                }
+
+                // MIME (Multipurpose Internet Mail Extensions) type of the requested file using the file's extension.
+                String mimeType = getMimeType(file.getAbsolutePath());
+
+                if (mimeType == null) {
+                    Log.e(TAG, "Unsupported file type: " + file.getAbsolutePath());
+                    sendErrorResponse(out, 500, "Internal Server Error");
+                    return;
+                }
+
+                byte[] fileData = readFileData(file);
+                sendResponse(out, 200, "OK", mimeType, fileData);
             }
-
-            String[] requestParts = request.toString().split("\\s+");
-            String method = requestParts[0];
-            String path = requestParts[1];
-
-            Log.d(TAG, "Request: " + method + " " + path);
-
-            serveFile(output, path);
-
-            output.flush();
-            output.close();
-            input.close();
         } catch (IOException e) {
             Log.e(TAG, "Error handling request: " + e.getMessage());
         }
+    }
+
+    private byte[] readFileData(File file) throws IOException {
+        byte[] buffer = new byte[1024];
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(file))) {
+            int bytesRead;
+            while ((bytesRead = in.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+        }
+        return outputStream.toByteArray();
+    }
+
+    private String getMimeType(String filePath) {
+        String extension = MimeTypeMap.getFileExtensionFromUrl(filePath);
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
     }
 
     private void serveFile(OutputStream output, String path) throws IOException {
@@ -119,7 +153,8 @@ public class  SocketServer extends Thread {
                 String contentType = getContentType(file);
                 byte[] fileContent = readFileContent(file);
                 if (contentType != null && fileContent != null) {
-                    sendResponse(output, 200, contentType, fileContent);
+                    String mimeType = null;
+                    sendResponse(output, 200, contentType, mimeType, fileContent);
                 } else {
                     Log.e(TAG, "Failed to read file: " + file.getAbsolutePath());
                     sendErrorResponse(output, 500, "Internal Server Error");
@@ -134,7 +169,7 @@ public class  SocketServer extends Thread {
         }
     }
 
-    private void sendResponse(OutputStream output, int statusCode, String contentType, byte[] content) throws IOException {
+    private void sendResponse(OutputStream output, int statusCode, String contentType, String mimeType, byte[] content) throws IOException {
         SimpleDateFormat dateFormat = new SimpleDateFormat("E, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH);
         dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
         String date = dateFormat.format(new Date());

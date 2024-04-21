@@ -17,7 +17,6 @@ import java.io.File;
 
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
-
     private static final String TAG = "HttpServer";
     private SocketServer s;
     private static final int READ_EXTERNAL_STORAGE = 1;

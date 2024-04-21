@@ -61,11 +61,14 @@ public class  SocketServer extends Thread {
 
                 threadSemaphore.acquire();
 
-                new Thread(() -> {
-                    try {
-                        handleRequest(s);
-                    } finally {
-                        threadSemaphore.release();
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            handleRequest(s);
+                        } finally {
+                            threadSemaphore.release();
+                        }
                     }
                 }).start();
 
@@ -140,7 +143,12 @@ public class  SocketServer extends Thread {
                 byte[] fileData = readFileData(file);
                 sendResponse(out, 200, "OK", mimeType, fileData);
 
-                event = "File " + file.getAbsolutePath() + " served";
+                // Construct the log message
+                StringBuilder logMessage = new StringBuilder();
+                logMessage.append(s.getInetAddress()).append(" -- ").append(new Date()).append("\n");
+                logMessage.append(request).append(" -- User-Agent: ").append(getUserAgent(in)).append("\n");
+
+                event = logMessage.toString();
                 MainActivity.sendMessageToHandler(event);
             }
         } catch (IOException e) {
@@ -170,6 +178,16 @@ public class  SocketServer extends Thread {
     private String getMimeType(String filePath) {
         String extension = MimeTypeMap.getFileExtensionFromUrl(filePath);
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+    }
+
+    private String getUserAgent(BufferedReader in) throws IOException {
+        String line;
+        while ((line = in.readLine()) != null) {
+            if (line.startsWith("User-Agent:")) {
+                return line.substring("User-Agent:".length()).trim();
+            }
+        }
+        return "Unknown";
     }
 
     private void serveFile(OutputStream output, String path) throws IOException {

@@ -135,10 +135,9 @@ public class TelemetryDataCollector implements SensorEventListener {
                             JSONObject telemetryJson = new JSONObject();
                             telemetryJson.put("latitude", location.getLatitude());
                             telemetryJson.put("longitude", location.getLongitude());
-                            callback.onTelemetryDataReceived(telemetryJson); // Call the callback with the telemetry data
+                            callback.onTelemetryDataReceived(telemetryJson);
                         } catch (JSONException e) {
                             e.printStackTrace();
-                            // Handle JSONException
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }

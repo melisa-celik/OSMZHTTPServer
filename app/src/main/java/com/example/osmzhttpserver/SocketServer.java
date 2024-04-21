@@ -148,7 +148,6 @@ public class  SocketServer extends Thread {
     }
 
     private void handleTelemetryRequest(OutputStream output) throws IOException {
-//        telemetryDataCollector.collectTelemetryData();
         JSONObject telemetryData = telemetryDataCollector.getTelemetryData();
         if (telemetryData != null) {
             sendJSONResponse(output, 200, telemetryData);

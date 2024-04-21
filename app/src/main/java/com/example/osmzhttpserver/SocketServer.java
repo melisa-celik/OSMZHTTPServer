@@ -1,6 +1,7 @@
 package com.example.osmzhttpserver;
 
 import android.content.Context;
+import android.hardware.Camera;
 import android.os.Environment;
 import android.os.Handler;
 import android.util.Log;
@@ -23,6 +24,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.Semaphore;
 
 public class  SocketServer extends Thread {
@@ -35,7 +38,7 @@ public class  SocketServer extends Thread {
     private Handler handler;
     private Semaphore threadSemaphore;
     private TelemetryDataCollector telemetryDataCollector;
-
+    private Timer mjpegTimer;
 
     public SocketServer(int maxThread, Handler handler, Context context) {
         threadSemaphore = new Semaphore(maxThread);
@@ -126,14 +129,12 @@ public class  SocketServer extends Thread {
                     return;
                 }
 
-                if (uri.equals("/streams/telemetry")) {
-                    serveStaticFile(out, "telemetry.html");
-                    handleTelemetryRequest(out);
+                if (uri.equals("/camera/stream")) {
+                    serveMJPEGStream(out);
                     return;
                 }
             }
 
-            // Handle other URIs or return an error response
             sendErrorResponse(out, 404, "Not Found");
         } catch (IOException e) {
             Log.e(TAG, "Error handling request: " + e.getMessage());
@@ -145,6 +146,60 @@ public class  SocketServer extends Thread {
                 Log.e(TAG, "Error closing socket: " + e.getMessage());
             }
         }
+    }
+
+    private void serveMJPEGStream(OutputStream output) throws IOException {
+        // Send HTTP header with multipart/x-mixed-replace content type
+        output.write(("HTTP/1.1 200 OK\r\n").getBytes());
+        output.write(("Content-Type: multipart/x-mixed-replace; boundary=OSMZ_boundary\r\n").getBytes());
+        output.write(("\r\n").getBytes());
+
+        // Create a new thread for capturing images and sending them in the MJPEG stream
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    // Open the camera
+                    Camera camera = Camera.open();
+
+                    // Set camera parameters for preview size
+                    Camera.Parameters params = camera.getParameters();
+                    params.setPreviewSize(640, 480);
+                    camera.setParameters(params);
+
+                    // Start the camera preview
+                    camera.setPreviewDisplay(null);
+                    camera.startPreview();
+
+                    // Loop for continuously capturing and sending frames
+                    while (true) {
+                        // Capture a preview frame
+                        camera.setPreviewCallback(new Camera.PreviewCallback() {
+                            @Override
+                            public void onPreviewFrame(byte[] data, Camera camera) {
+                                try {
+                                    // Send boundary delimiter
+                                    output.write(("--OSMZ_boundary\r\n").getBytes());
+                                    // Send content type
+                                    output.write(("Content-Type: image/jpeg\r\n").getBytes());
+                                    output.write(("\r\n").getBytes());
+                                    // Send image data
+                                    output.write(data);
+                                    output.write(("\r\n").getBytes());
+                                } catch (IOException e) {
+                                    Log.e(TAG, "Error sending JPEG image: " + e.getMessage());
+                                }
+                            }
+                        });
+
+                        // Delay to control frame rate (approximately 3 frames per second)
+                        Thread.sleep(1000 / 3);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error serving MJPEG stream: " + e.getMessage());
+                }
+            }
+        }).start();
     }
 
     private void handleTelemetryRequest(OutputStream output) throws IOException {

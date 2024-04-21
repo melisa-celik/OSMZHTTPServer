@@ -34,7 +34,7 @@ public class TelemetryDataCollector {
         fusedLocationClient = new FusedLocationProviderClient(context);
     }
 
-    public void collectTelemetryData(final OutputStream output) {
+    public void collectTelemetryData(final TelemetryDataCallback callback) {
         LocationRequest locationRequest = LocationRequest.create()
                 .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
                 .setInterval(LOCATION_UPDATE_INTERVAL)
@@ -53,13 +53,18 @@ public class TelemetryDataCollector {
                 latitude = location.getLatitude();
                 longitude = location.getLongitude();
                 try {
-                    sendTelemetryData(output);
-                } catch (IOException e) {
+                    JSONObject telemetryJson = new JSONObject();
+                    telemetryJson.put("latitude", latitude);
+                    telemetryJson.put("longitude", longitude);
+                    callback.onTelemetryDataReceived(telemetryJson); // Call the callback with the telemetry data
+                } catch (JSONException e) {
                     e.printStackTrace();
-                    // Handle IOException
+                    // Handle JSONException
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
                 }
             } else {
-                requestLocationUpdates(locationRequest, output);
+                requestLocationUpdates(locationRequest, callback);
             }
         }).addOnFailureListener(e -> {
             e.printStackTrace();
@@ -67,7 +72,7 @@ public class TelemetryDataCollector {
         });
     }
 
-    private void requestLocationUpdates(LocationRequest locationRequest, OutputStream output) {
+    private void requestLocationUpdates(LocationRequest locationRequest, TelemetryDataCallback callback) {
         if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
                 && ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             // Permission is not granted, handle it here
@@ -86,10 +91,15 @@ public class TelemetryDataCollector {
                         latitude = location.getLatitude();
                         longitude = location.getLongitude();
                         try {
-                            sendTelemetryData(output);
-                        } catch (IOException e) {
+                            JSONObject telemetryJson = new JSONObject();
+                            telemetryJson.put("latitude", latitude);
+                            telemetryJson.put("longitude", longitude);
+                            callback.onTelemetryDataReceived(telemetryJson); // Call the callback with the telemetry data
+                        } catch (JSONException e) {
                             e.printStackTrace();
-                            // Handle IOException
+                            // Handle JSONException
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
                         }
                     }
                 }
@@ -119,20 +129,26 @@ public class TelemetryDataCollector {
         output.write((json.toString()).getBytes());
     }
 
+    // Define a callback interface
+    public interface TelemetryDataCallback {
+        void onTelemetryDataReceived(JSONObject telemetryData) throws IOException;
+    }
+
     public JSONObject collectTelemetryData() {
-        JSONObject telemetryJson = new JSONObject();
         try {
             Location lastLocation = fusedLocationClient.getLastLocation().getResult();
             if (lastLocation != null) {
-                double latitude = lastLocation.getLatitude();
-                double longitude = lastLocation.getLongitude();
-                telemetryJson.put("latitude", latitude);
-                telemetryJson.put("longitude", longitude);
+                JSONObject telemetryJson = new JSONObject();
+                telemetryJson.put("latitude", lastLocation.getLatitude());
+                telemetryJson.put("longitude", lastLocation.getLongitude());
+                // Add other telemetry data to the JSON object as needed
+                return telemetryJson;
+            } else {
+                Log.e(TAG, "Last location is null");
             }
-            return telemetryJson;
-        } catch (JSONException | SecurityException e) {
+        } catch (SecurityException | JSONException e) {
             Log.e(TAG, "Error collecting telemetry data: " + e.getMessage());
-            return null;
         }
+        return null;
     }
 }

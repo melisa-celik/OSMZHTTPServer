@@ -96,80 +96,6 @@ public class  SocketServer extends Thread {
         }
     }
 
-//    private void handleRequest(Socket s) {
-//        try {
-//            if (!threadSemaphore.tryAcquire()) {
-//                sendErrorResponse(s.getOutputStream(), 503, "Server too busy");
-//                s.close();
-//                return;
-//            }
-//
-//            BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream()));
-//            OutputStream out = s.getOutputStream();
-//            String request = in.readLine();
-//            String event = null;
-//
-//            if (request != null && request.trim().length() > 0) {
-//                Log.d(TAG, "Request: " + request);
-//
-//                String[] tokens = request.split(" ");
-//                if (tokens.length < 2) {
-//                    Log.e(TAG, "Invalid request: " + request);
-//                    return;
-//                }
-//
-//                String method = tokens[0];
-//                String uri = tokens[1];
-//
-//                if (!method.equalsIgnoreCase("GET")) {
-//                    Log.e(TAG, "Unsupported method: " + method);
-//                    sendErrorResponse(out, 501, "Not Implemented");
-//                    return;
-//                }
-//
-//                File file = new File(Environment.getExternalStorageDirectory(), uri);
-//                if (!file.exists()) {
-//                    Log.e(TAG, "File not found: " + file.getAbsolutePath());
-//                    sendErrorResponse(out, 404, "Not Found");
-//                    return;
-//                }
-//
-//                if (file.isDirectory()) {
-//                    file = new File(file, DEFAULT_PAGE);
-//                }
-//
-//                // MIME (Multipurpose Internet Mail Extensions) type of the requested file using the file's extension.
-//                String mimeType = getMimeType(file.getAbsolutePath());
-//
-//                if (mimeType == null) {
-//                    Log.e(TAG, "Unsupported file type: " + file.getAbsolutePath());
-//                    sendErrorResponse(out, 500, "Internal Server Error");
-//                    return;
-//                }
-//
-//                byte[] fileData = readFileData(file);
-//                sendResponse(out, 200, "OK", mimeType, fileData);
-//
-//                // Construct the log message
-//                StringBuilder logMessage = new StringBuilder();
-//                logMessage.append(s.getInetAddress()).append(" -- ").append(new Date()).append("\n");
-//                logMessage.append(request).append(" -- User-Agent: ").append(getUserAgent(in)).append("\n");
-//
-//                event = logMessage.toString();
-//                MainActivity.sendMessageToHandler(event);
-//            }
-//        } catch (IOException e) {
-//            Log.e(TAG, "Error handling request: " + e.getMessage());
-//        } finally {
-//            try {
-//                s.close();
-//                threadSemaphore.release();
-//            } catch (IOException e) {
-//                Log.e(TAG, "Error closing socket: " + e.getMessage());
-//            }
-//        }
-//    }
-
     private void handleRequest(Socket s) {
         try {
             if (!threadSemaphore.tryAcquire()) {
@@ -202,13 +128,13 @@ public class  SocketServer extends Thread {
                 }
 
                 if (uri.equals("/streams/telemetry")) {
+                    serveFile(out, uri);
                     handleTelemetryRequest(out);
-                    return;
+                    return; // Exit method after serving the telemetry data
                 }
-
-                // Serve files from the server root
-                serveFile(out, uri);
             }
+            // Handle other URIs or return an error response
+            sendErrorResponse(out, 404, "Not Found");
         } catch (IOException e) {
             Log.e(TAG, "Error handling request: " + e.getMessage());
         } finally {
@@ -221,20 +147,23 @@ public class  SocketServer extends Thread {
         }
     }
 
-
-
     private void handleTelemetryRequest(OutputStream output) {
-        try {
-            JSONObject telemetryData = telemetryDataCollector.collectTelemetryData();
-            if (telemetryData != null) {
-                sendJSONResponse(output, 200, telemetryData);
-            } else {
-                sendErrorResponse(output, 500, "Error collecting telemetry data");
+        telemetryDataCollector.collectTelemetryData(new TelemetryDataCollector.TelemetryDataCallback() {
+            @Override
+            public void onTelemetryDataReceived(JSONObject telemetryData) throws IOException {
+                if (telemetryData != null) {
+                    try {
+                        sendJSONResponse(output, 200, telemetryData);
+                    } catch (IOException e) {
+                        Log.e(TAG, "Error sending telemetry data: " + e.getMessage());
+                    }
+                } else {
+                    sendErrorResponse(output, 500, "Error collecting telemetry data");
+                }
             }
-        } catch (IOException e) {
-            Log.e(TAG, "Error handling telemetry request: " + e.getMessage());
-        }
+        });
     }
+
 
     private void sendJSONResponse(OutputStream output, int statusCode, JSONObject json) throws IOException {
         output.write(("HTTP/1.1 " + statusCode + " OK\r\n").getBytes());
@@ -273,7 +202,7 @@ public class  SocketServer extends Thread {
     private void serveFile(OutputStream output, String path) throws IOException {
         try {
             File file;
-            if (path.equals("/")) {
+            if (path.equals("/streams/telemetry")) {
                 file = new File(Environment.getExternalStorageDirectory() + SERVER_ROOT + DEFAULT_PAGE);
             } else {
                 file = new File(Environment.getExternalStorageDirectory() + SERVER_ROOT + path);

@@ -130,8 +130,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_READ_EXTERNAL_STORAGE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                initializeServer();
+                initializeServer(); // Call initializeServer when permission is granted
             } else {
+                // Handle permission denied
             }
         }
     }

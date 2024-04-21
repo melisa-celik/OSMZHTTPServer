@@ -107,7 +107,6 @@ public class  SocketServer extends Thread {
             BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream()));
             OutputStream out = s.getOutputStream();
             String request = in.readLine();
-            String event = null;
 
             if (request != null && request.trim().length() > 0) {
                 Log.d(TAG, "Request: " + request);
@@ -128,11 +127,12 @@ public class  SocketServer extends Thread {
                 }
 
                 if (uri.equals("/streams/telemetry")) {
-                    serveFile(out, uri);
+                    serveStaticFile(out, "telemetry.html");
                     handleTelemetryRequest(out);
-                    return; // Exit method after serving the telemetry data
+                    return;
                 }
             }
+
             // Handle other URIs or return an error response
             sendErrorResponse(out, 404, "Not Found");
         } catch (IOException e) {
@@ -147,29 +147,44 @@ public class  SocketServer extends Thread {
         }
     }
 
-    private void handleTelemetryRequest(OutputStream output) {
-        telemetryDataCollector.collectTelemetryData(new TelemetryDataCollector.TelemetryDataCallback() {
-            @Override
-            public void onTelemetryDataReceived(JSONObject telemetryData) throws IOException {
-                if (telemetryData != null) {
-                    try {
-                        sendJSONResponse(output, 200, telemetryData);
-                    } catch (IOException e) {
-                        Log.e(TAG, "Error sending telemetry data: " + e.getMessage());
-                    }
-                } else {
-                    sendErrorResponse(output, 500, "Error collecting telemetry data");
-                }
-            }
-        });
+    private void handleTelemetryRequest(OutputStream output) throws IOException {
+//        telemetryDataCollector.collectTelemetryData();
+        JSONObject telemetryData = telemetryDataCollector.getTelemetryData();
+        if (telemetryData != null) {
+            sendJSONResponse(output, 200, telemetryData);
+        } else {
+            sendErrorResponse(output, 500, "Error collecting telemetry data");
+        }
     }
-
 
     private void sendJSONResponse(OutputStream output, int statusCode, JSONObject json) throws IOException {
         output.write(("HTTP/1.1 " + statusCode + " OK\r\n").getBytes());
         output.write(("Content-Type: application/json\r\n").getBytes());
+        output.write(("Access-Control-Allow-Origin: *\r\n").getBytes()); // Add CORS header to allow cross-origin requests
         output.write(("\r\n").getBytes());
         output.write((json.toString()).getBytes());
+    }
+
+    private void serveStaticFile(OutputStream output, String fileName) throws IOException {
+        File file = new File(Environment.getExternalStorageDirectory() + SERVER_ROOT + fileName);
+        if (!file.exists()) {
+            sendErrorResponse(output, 404, "File Not Found");
+            return;
+        }
+
+        FileInputStream fis = null;
+        try {
+            fis = new FileInputStream(file);
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = fis.read(buffer)) != -1) {
+                output.write(buffer, 0, bytesRead);
+            }
+        } finally {
+            if (fis != null) {
+                fis.close();
+            }
+        }
     }
 
     private byte[] readFileData(File file) throws IOException {

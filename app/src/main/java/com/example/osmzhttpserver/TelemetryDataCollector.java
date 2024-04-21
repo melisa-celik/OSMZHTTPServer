@@ -2,6 +2,11 @@ package com.example.osmzhttpserver;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorListener;
+import android.hardware.SensorManager;
 import android.location.Location;
 import android.os.Looper;
 import android.util.Log;
@@ -13,6 +18,7 @@ import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -20,7 +26,9 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.io.OutputStream;
 
-public class TelemetryDataCollector {
+public class TelemetryDataCollector implements SensorEventListener {
+    private SensorManager sensorManager;
+    private JSONObject telemetryData;
     private FusedLocationProviderClient fusedLocationClient;
     private static final long LOCATION_UPDATE_INTERVAL = 10000; // 10 seconds
     private static final long FASTEST_LOCATION_UPDATE_INTERVAL = 5000; // 5 seconds
@@ -31,7 +39,48 @@ public class TelemetryDataCollector {
 
     public TelemetryDataCollector(Context context) {
         this.context = context;
-        fusedLocationClient = new FusedLocationProviderClient(context);
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(context);
+        sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+        telemetryData = new JSONObject();
+        registerSensorListeners();
+    }
+
+    private void registerSensorListeners() {
+        // Register listeners for required sensors
+        // Example:
+        Sensor accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        sensorManager.registerListener((SensorEventListener) this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        // Register for other required sensors
+    }
+
+
+    private void unregisterSensorListeners() {
+        sensorManager.unregisterListener((SensorListener) this);
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        // Update telemetryData with sensor data
+        // Example:
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            try {
+                telemetryData.put("accelerometer_x", event.values[0]);
+                telemetryData.put("accelerometer_y", event.values[1]);
+                telemetryData.put("accelerometer_z", event.values[2]);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+        // Handle other sensor data
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // Handle accuracy changes if needed
+    }
+
+    public JSONObject getTelemetryData() {
+        return telemetryData;
     }
 
     public void collectTelemetryData(final TelemetryDataCallback callback) {
@@ -50,25 +99,19 @@ public class TelemetryDataCollector {
 
         fusedLocationClient.getLastLocation().addOnSuccessListener(location -> {
             if (location != null) {
-                latitude = location.getLatitude();
-                longitude = location.getLongitude();
                 try {
                     JSONObject telemetryJson = new JSONObject();
-                    telemetryJson.put("latitude", latitude);
-                    telemetryJson.put("longitude", longitude);
+                    telemetryJson.put("latitude", location.getLatitude());
+                    telemetryJson.put("longitude", location.getLongitude());
                     callback.onTelemetryDataReceived(telemetryJson); // Call the callback with the telemetry data
-                } catch (JSONException e) {
+                } catch (JSONException | IOException e) {
                     e.printStackTrace();
-                    // Handle JSONException
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
                 }
             } else {
                 requestLocationUpdates(locationRequest, callback);
             }
         }).addOnFailureListener(e -> {
             e.printStackTrace();
-            // Handle failure
         });
     }
 
@@ -88,12 +131,10 @@ public class TelemetryDataCollector {
                 if (locationResult != null) {
                     Location location = locationResult.getLastLocation();
                     if (location != null) {
-                        latitude = location.getLatitude();
-                        longitude = location.getLongitude();
                         try {
                             JSONObject telemetryJson = new JSONObject();
-                            telemetryJson.put("latitude", latitude);
-                            telemetryJson.put("longitude", longitude);
+                            telemetryJson.put("latitude", location.getLatitude());
+                            telemetryJson.put("longitude", location.getLongitude());
                             callback.onTelemetryDataReceived(telemetryJson); // Call the callback with the telemetry data
                         } catch (JSONException e) {
                             e.printStackTrace();
@@ -105,21 +146,6 @@ public class TelemetryDataCollector {
                 }
             }
         }, Looper.getMainLooper());
-    }
-
-    private void sendTelemetryData(OutputStream output) throws IOException {
-        JSONObject telemetryJson = new JSONObject();
-        try {
-            telemetryJson.put("latitude", latitude);
-            telemetryJson.put("longitude", longitude);
-            // Add other telemetry data to the JSON object as needed
-
-            // Send JSON response
-            sendJSONResponse(output, 200, telemetryJson);
-        } catch (JSONException e) {
-            e.printStackTrace();
-            // Handle JSONException
-        }
     }
 
     private void sendJSONResponse(OutputStream output, int statusCode, JSONObject json) throws IOException {

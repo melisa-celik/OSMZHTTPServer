@@ -112,7 +112,7 @@ public class  SocketServer extends Thread {
             if (path.equals("/")) {
                 file = new File(Environment.getExternalStorageDirectory() + SERVER_ROOT + DEFAULT_PAGE);
             } else {
-                file = new File(Environment.getExternalStorageDirectory() + SERVER_ROOT);
+                file = new File(Environment.getExternalStorageDirectory() + SERVER_ROOT + path);
             }
 
             if (file.exists() && file.isFile()) {

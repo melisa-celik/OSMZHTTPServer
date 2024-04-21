@@ -4,12 +4,17 @@ import android.app.Activity;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
 import android.widget.FrameLayout;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Timer;
+import java.util.TimerTask;
+
 import android.os.Environment;
 
 public class CameraActivity extends Activity {
@@ -96,7 +101,25 @@ public class CameraActivity extends Activity {
 
         // Create our Preview view and set it as the content of our activity.
         mPreview = new CameraPreview(this, mCamera);
-        FrameLayout preview = (FrameLayout) findViewById(R.id.camera_preview);
+        FrameLayout preview = findViewById(R.id.camera_preview);
         preview.addView(mPreview);
+
+        // Schedule the timer to take a picture every second
+        Timer timer = new Timer();
+        timer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                // Trigger the camera to take a picture
+                mCamera.takePicture(null, null, mPicture);
+            }
+        }, 0, 1000); // Delay of 0 milliseconds, repeat every 1000 milliseconds (1 second)
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Stop the timer when the activity is destroyed to prevent memory leaks
+        Timer timer = new Timer();
+        timer.cancel();
     }
 }

@@ -32,7 +32,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         public void handleMessage(@NonNull android.os.Message msg) {
             String event = (String) msg.obj;
             appendLog(event);
-//            sendMessageToHandler(event); // test
         }
     };
 

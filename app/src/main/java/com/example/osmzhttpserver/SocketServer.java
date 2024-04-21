@@ -149,7 +149,6 @@ public class  SocketServer extends Thread {
     }
 
     private void serveMJPEGStream(OutputStream output) throws IOException {
-        // Send HTTP header with multipart/x-mixed-replace content type
         output.write(("HTTP/1.1 200 OK\r\n").getBytes());
         output.write(("Content-Type: multipart/x-mixed-replace; boundary=OSMZ_boundary\r\n").getBytes());
         output.write(("\r\n").getBytes());

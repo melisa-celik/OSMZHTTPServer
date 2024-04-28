@@ -158,7 +158,7 @@ public class  SocketServer extends Thread {
                     byte[] fileData = readFileData(file);
                     sendResponse(out, 200, "OK", mimeType, fileData);
                 } else if (method.equalsIgnoreCase("POST")) {
-                    if (uri.equals("/")) {
+                    if (uri.equals("/file.html")) {
                         handlePostRequest(in, out);
                         return;
                     }
@@ -185,7 +185,7 @@ public class  SocketServer extends Thread {
     private void handlePostRequest(BufferedReader in, OutputStream out) throws IOException {
         try {
             String line;
-            while ((line = in.readLine()) != null) {
+            while ((line = in.readLine()) != null && !line.isEmpty()) {
                 if (line.equals("")) {
                     break;
                 }
@@ -244,13 +244,13 @@ public class  SocketServer extends Thread {
         }
     }
 
-    private void saveUploadedFile(String filename, byte[] data) throws FileNotFoundException {
-        String filePath = Environment.getExternalStorageDirectory() + "/" + filename;
-        File file = new File(filePath);
+    private void saveUploadedFile(String filename, byte[] data) throws IOException {
+        File file = new File(Environment.getExternalStorageDirectory(), filename);
         try (FileOutputStream fos = new FileOutputStream(file)) {
             fos.write(data);
         } catch (IOException e) {
             Log.e(TAG, "Error saving uploaded file: " + e.getMessage());
+            throw e;
         }
     }
 

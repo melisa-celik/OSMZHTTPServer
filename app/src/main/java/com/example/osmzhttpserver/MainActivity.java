@@ -45,6 +45,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private Camera mCamera;
     private CameraPreview mPreview;
     private CameraActivity cameraActivity;
+//    private HTTPD httpServer;
+
     private static Handler handler = new Handler(Looper.getMainLooper()) {
         public void handleMessage(@NonNull android.os.Message msg) {
             String event = (String) msg.obj;
@@ -80,6 +82,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         } else {
 //            initializeCamera();
             initializeServer();
+//            startHttpServer();
         }
         if (!checkCameraHardware(this)) {
             Log.e(TAG, "No camera found.");
@@ -134,6 +137,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
+//    private void startHttpServer() {
+//        if (httpServer == null) {
+//            try {
+//                httpServer = new HTTPD();
+//            } catch (IOException e) {
+//                Log.e(TAG, "Error starting HTTP server: " + e.getMessage());
+//            }
+//        } else {
+//            Log.d(TAG, "HTTP server is already running.");
+//        }
+//    }
+
     /** Check if this device has a camera */
     private boolean checkCameraHardware(Context context) {
         if (context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA)){
@@ -183,7 +198,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     };
 
     private void changeFilePermissions() {
-        File file = new File(Environment.getExternalStorageDirectory(), "file.html");
+        File file = new File(Environment.getExternalStorageDirectory(), "post.html");
         if (file.exists()) {
             file.setReadable(true);
             file.setWritable(true);
@@ -197,10 +212,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View v) {
         if (v.getId() == R.id.button1) {
             initializeServer();
+//            startHttpServer();
         }
         if (v.getId() == R.id.button2) {
             if (s != null) {
                 s.close();
+//                stopHttpServer();
                 try {
                     s.join();
                 } catch (InterruptedException e) {
@@ -209,6 +226,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         }
     }
+
+//    private void stopHttpServer() {
+//        if (httpServer != null) {
+//            httpServer.stop();
+//            httpServer = null;
+//        }
+//    }
 
     static void sendMessageToHandler(String message) {
         Message msg = handler.obtainMessage();

@@ -38,7 +38,7 @@ public class  SocketServer extends Thread {
     public final int port = 12345;
     boolean bRunning;
     private static final String SERVER_ROOT = "/";
-    private static final String DEFAULT_PAGE = "file.html";
+    private static final String DEFAULT_PAGE = "post.html";
     private Handler handler;
     private Semaphore threadSemaphore;
     private TelemetryDataCollector telemetryDataCollector;
@@ -158,7 +158,7 @@ public class  SocketServer extends Thread {
                     byte[] fileData = readFileData(file);
                     sendResponse(out, 200, "OK", mimeType, fileData);
                 } else if (method.equalsIgnoreCase("POST")) {
-                    if (uri.equals("/file.html")) {
+                    if (uri.equals("/post.html")) {
                         handlePostRequest(in, out);
                         return;
                     }
@@ -201,16 +201,13 @@ public class  SocketServer extends Thread {
                 requestBody.write("\n".getBytes());
             }
 
-            // Split multipart data by boundary
             String[] parts = requestBody.toString().split("------WebKitFormBoundary");
 
-            // Process each part
             for (String part : parts) {
                 if (part.trim().isEmpty()) {
                     continue;
                 }
 
-                // Extract filename and content
                 String[] lines = part.split("\n");
                 String filename = null;
                 ByteArrayOutputStream fileContent = new ByteArrayOutputStream();
@@ -245,7 +242,7 @@ public class  SocketServer extends Thread {
     }
 
     private void saveUploadedFile(String filename, byte[] data) throws IOException {
-        File file = new File(Environment.getExternalStorageDirectory(), filename);
+        File file = new File("/path/to/destination/" + filename);
         try (FileOutputStream fos = new FileOutputStream(file)) {
             fos.write(data);
         } catch (IOException e) {

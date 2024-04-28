@@ -14,6 +14,8 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -25,25 +27,31 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
 import java.util.Timer;
-import java.util.TimerTask;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 
 public class  SocketServer extends Thread {
     private static final String TAG = "HttpServer";
+    private final Context context;
     ServerSocket serverSocket;
     public final int port = 12345;
     boolean bRunning;
     private static final String SERVER_ROOT = "/";
-    private static final String DEFAULT_PAGE = "telemetry.html";
+    private static final String DEFAULT_PAGE = "file.html";
     private Handler handler;
     private Semaphore threadSemaphore;
     private TelemetryDataCollector telemetryDataCollector;
     private Timer mjpegTimer;
+    private ExecutorService executorService;
+    private Camera mCamera;
 
-    public SocketServer(int maxThread, Handler handler, Context context) {
+    public SocketServer(int maxThread, Handler handler, Context context,  Camera camera) {
         threadSemaphore = new Semaphore(maxThread);
         this.handler = handler;
-        this.telemetryDataCollector = new TelemetryDataCollector(context);
+        this.context = context;
+        this.mCamera = camera;
+        this.executorService = Executors.newFixedThreadPool(maxThread);
     }
 
     public void close() {
@@ -68,34 +76,29 @@ public class  SocketServer extends Thread {
                 Socket s = serverSocket.accept();
                 Log.d("SERVER", "Socket Accepted");
 
-                threadSemaphore.acquire();
-
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
                         try {
                             handleRequest(s);
-                            threadSemaphore.release();
                         } catch (Exception e) {
                             Log.e(TAG, "Error handling request: " + e.getMessage());
                         }
                     }
                 }).start();
 
-//                s.close();
                 Log.d("SERVER", "Socket Closed");
             }
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             if (serverSocket != null && serverSocket.isClosed())
                 Log.d("SERVER", "Normal exit");
             else {
-                Log.d("SERVER", "Error creating server socket: " + e.getMessage());
+                Log.e("SERVER", "Error creating server socket: " + e.getMessage());
                 e.printStackTrace();
             }
         } finally {
             serverSocket = null;
             bRunning = false;
-
         }
     }
 
@@ -123,14 +126,45 @@ public class  SocketServer extends Thread {
                 String method = tokens[0];
                 String uri = tokens[1];
 
-                if (!method.equalsIgnoreCase("GET")) {
+//                if (method.equalsIgnoreCase("GET")) {
+//                    if (uri.equals("/camera/stream")) {
+//                        serveMJPEGStream(out);
+//                        return;
+//                    } else {
+//                        serveFile(out, uri);
+//                        return;
+//                    }
+
+                if (method.equalsIgnoreCase("GET")) {
+                    File file = new File(Environment.getExternalStorageDirectory(), uri);
+                    if (!file.exists()) {
+                        Log.e(TAG, "File not found: " + file.getAbsolutePath());
+                        sendErrorResponse(out, 404, "Not Found");
+                        return;
+                    }
+
+                    if (file.isDirectory()) {
+                        file = new File(file, DEFAULT_PAGE);
+                    }
+
+                    String mimeType = getMimeType(file.getAbsolutePath());
+
+                    if (mimeType == null) {
+                        Log.e(TAG, "Unsupported file type: " + file.getAbsolutePath());
+                        sendErrorResponse(out, 500, "Internal Server Error");
+                        return;
+                    }
+
+                    byte[] fileData = readFileData(file);
+                    sendResponse(out, 200, "OK", mimeType, fileData);
+                } else if (method.equalsIgnoreCase("POST")) {
+                    if (uri.equals("/")) {
+                        handlePostRequest(in, out);
+                        return;
+                    }
+                } else {
                     Log.e(TAG, "Unsupported method: " + method);
                     sendErrorResponse(out, 501, "Not Implemented");
-                    return;
-                }
-
-                if (uri.equals("/camera/stream")) {
-                    serveMJPEGStream(out);
                     return;
                 }
             }
@@ -148,32 +182,99 @@ public class  SocketServer extends Thread {
         }
     }
 
+    private void handlePostRequest(BufferedReader in, OutputStream out) throws IOException {
+        try {
+            String line;
+            while ((line = in.readLine()) != null) {
+                if (line.equals("")) {
+                    break;
+                }
+            }
+
+            ByteArrayOutputStream requestBody = new ByteArrayOutputStream();
+            while ((line = in.readLine()) != null) {
+                // Check for the boundary to identify the end of each part
+                if (line.contains("------WebKitFormBoundary")) {
+                    break;
+                }
+                requestBody.write(line.getBytes());
+                requestBody.write("\n".getBytes());
+            }
+
+            // Split multipart data by boundary
+            String[] parts = requestBody.toString().split("------WebKitFormBoundary");
+
+            // Process each part
+            for (String part : parts) {
+                if (part.trim().isEmpty()) {
+                    continue;
+                }
+
+                // Extract filename and content
+                String[] lines = part.split("\n");
+                String filename = null;
+                ByteArrayOutputStream fileContent = new ByteArrayOutputStream();
+                boolean readingContent = false;
+                for (String l : lines) {
+                    if (l.startsWith("Content-Disposition:")) {
+                        String[] disposition = l.split("; ");
+                        for (String d : disposition) {
+                            if (d.trim().startsWith("filename=")) {
+                                filename = d.trim().substring("filename=".length()).replaceAll("\"", "");
+                            }
+                        }
+                    } else if (l.equals("")) {
+                        readingContent = true;
+                    } else if (readingContent) {
+                        fileContent.write(l.getBytes());
+                        fileContent.write("\n".getBytes());
+                    }
+                }
+
+                if (filename != null && fileContent.size() > 0) {
+                    saveUploadedFile(filename, fileContent.toByteArray());
+                }
+            }
+
+            sendSuccessResponse(out);
+
+        } catch (IOException e) {
+            Log.e(TAG, "Error handling POST request: " + e.getMessage());
+            sendErrorResponse(out, 500, "Internal Server Error");
+        }
+    }
+
+    private void saveUploadedFile(String filename, byte[] data) throws FileNotFoundException {
+        String filePath = Environment.getExternalStorageDirectory() + "/" + filename;
+        File file = new File(filePath);
+        try (FileOutputStream fos = new FileOutputStream(file)) {
+            fos.write(data);
+        } catch (IOException e) {
+            Log.e(TAG, "Error saving uploaded file: " + e.getMessage());
+        }
+    }
+
+    private void sendSuccessResponse(OutputStream out) throws IOException {
+        out.write("HTTP/1.1 200 OK\r\n".getBytes());
+        out.write("Content-Type: text/plain\r\n".getBytes());
+        out.write("\r\n".getBytes());
+        out.write("File uploaded successfully".getBytes());
+    }
+
     private void serveMJPEGStream(OutputStream output) throws IOException {
         output.write(("HTTP/1.1 200 OK\r\n").getBytes());
         output.write(("Content-Type: multipart/x-mixed-replace; boundary=OSMZ_boundary\r\n").getBytes());
         output.write(("\r\n").getBytes());
 
-        // Create a new thread for capturing images and sending them in the MJPEG stream
+        // Start a thread to continuously capture frames and send them as MJPEG stream
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    // Open the camera
-                    Camera camera = Camera.open();
-
-                    // Set camera parameters for preview size
-                    Camera.Parameters params = camera.getParameters();
-                    params.setPreviewSize(640, 480);
-                    camera.setParameters(params);
-
-                    // Start the camera preview
-                    camera.setPreviewDisplay(null);
-                    camera.startPreview();
-
                     // Loop for continuously capturing and sending frames
                     while (true) {
                         // Capture a preview frame
-                        camera.setPreviewCallback(new Camera.PreviewCallback() {
+                        mCamera.setPreviewCallback(new Camera.PreviewCallback() {
                             @Override
                             public void onPreviewFrame(byte[] data, Camera camera) {
                                 try {
@@ -190,9 +291,6 @@ public class  SocketServer extends Thread {
                                 }
                             }
                         });
-
-                        // Delay to control frame rate (approximately 3 frames per second)
-                        Thread.sleep(1000 / 3);
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "Error serving MJPEG stream: " + e.getMessage());
@@ -270,7 +368,7 @@ public class  SocketServer extends Thread {
     private void serveFile(OutputStream output, String path) throws IOException {
         try {
             File file;
-            if (path.equals("/streams/telemetry")) {
+            if (path.equals("/camera/stream")) {
                 file = new File(Environment.getExternalStorageDirectory() + SERVER_ROOT + DEFAULT_PAGE);
             } else {
                 file = new File(Environment.getExternalStorageDirectory() + SERVER_ROOT + path);

@@ -35,6 +35,49 @@ public class CameraActivity extends Activity {
         return c; // returns null if camera is unavailable
     }
 
+    private void initializeCamera() {
+        // Check if the device has a camera
+        if (!checkCameraHardware(this)) {
+            Log.e(TAG, "No camera found.");
+            return;
+        }
+
+        try {
+            // Create an instance of Camera
+            mCamera = getCameraInstance();
+            if (mCamera != null) {
+                // Create our Preview view and set it as the content of our activity.
+                mPreview = new CameraPreview(this, mCamera);
+                FrameLayout preview = findViewById(R.id.camera_preview);
+                preview.addView(mPreview);
+
+                // Schedule the timer to take a picture every second
+                Timer timer = new Timer();
+                timer.scheduleAtFixedRate(new TimerTask() {
+                    @Override
+                    public void run() {
+                        // Trigger the camera to take a picture
+                        mCamera.takePicture(null, null, mPicture);
+                    }
+                }, 0, 1000); // Delay of 0 milliseconds, repeat every 1000 milliseconds (1 second)
+            } else {
+                Log.e(TAG, "Failed to initialize camera.");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error initializing camera: " + e.getMessage());
+        }
+    }
+
+    private boolean checkCameraHardware(CameraActivity cameraActivity) {
+        if (cameraActivity.getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA)){
+            // this device has a camera
+            return true;
+        } else {
+            // no camera on this device
+            return false;
+        }
+    }
+
     /** Create a File for saving an image or video */
     private static File getOutputMediaFile(int type){
         // To be safe, you should check that the SDCard is mounted
@@ -63,9 +106,9 @@ public class CameraActivity extends Activity {
     }
 
     private Camera.PictureCallback mPicture = new Camera.PictureCallback() {
-
         @Override
         public void onPictureTaken(byte[] data, Camera camera) {
+            Log.d(TAG, "Picture taken.");
 
             File pictureFile = getOutputMediaFile(MEDIA_TYPE_IMAGE);
             if (pictureFile == null){
@@ -77,15 +120,16 @@ public class CameraActivity extends Activity {
                 FileOutputStream fos = new FileOutputStream(pictureFile);
                 fos.write(data);
                 fos.close();
+                Log.d(TAG, "Image saved successfully.");
             } catch (FileNotFoundException e) {
-                Log.d(TAG, "File not found: " + e.getMessage());
+                Log.e(TAG, "File not found: " + e.getMessage());
             } catch (IOException e) {
-                Log.d(TAG, "Error accessing file: " + e.getMessage());
+                Log.e(TAG, "Error accessing file: " + e.getMessage());
             }
         }
     };
 
-    private void releaseCamera(){
+    void releaseCamera(){
         if (mCamera != null){
             mCamera.release();        // release the camera for other applications
             mCamera = null;

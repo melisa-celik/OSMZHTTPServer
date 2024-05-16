@@ -203,7 +203,7 @@ public class  SocketServer extends Thread {
                 boolean readingContent = false;
                 for (String l : lines) {
                     if (l.startsWith("Content-Disposition:")) {
-                        String[] disposition = l.split(" ");
+                        String[] disposition = l.split("; ");
                         for (String d : disposition) {
                             if (d.trim().startsWith("filename=")) {
                                 filename = d.trim().substring("filename=".length()).replaceAll("\"", "");

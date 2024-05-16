@@ -127,29 +127,9 @@ public class  SocketServer extends Thread {
                 String uri = tokens[1];
 
                 if (method.equalsIgnoreCase("GET")) {
-                    File file = new File(Environment.getExternalStorageDirectory(), uri);
-                    if (!file.exists()) {
-                        Log.e(TAG, "File not found: " + file.getAbsolutePath());
-                        sendErrorResponse(out, 404, "Not Found");
-                        return;
-                    }
-
-                    if (file.isDirectory()) {
-                        file = new File(file, DEFAULT_PAGE);
-                    }
-
-                    String mimeType = getMimeType(file.getAbsolutePath());
-
-                    if (mimeType == null) {
-                        Log.e(TAG, "Unsupported file type: " + file.getAbsolutePath());
-                        sendErrorResponse(out, 500, "Internal Server Error");
-                        return;
-                    }
-
-                    byte[] fileData = readFileData(file);
-                    sendResponse(out, 200, "OK", mimeType, fileData);
+                    serveFile(out, uri);
                 } else if (method.equalsIgnoreCase("POST")) {
-                    if (uri.equals("/post.html")) {
+                    if (uri.equals("/")) {
                         handlePostRequest(in, out);
                         return;
                     }
@@ -173,72 +153,83 @@ public class  SocketServer extends Thread {
     }
 
     private void handlePostRequest(BufferedReader in, OutputStream out) throws IOException {
-        try {
-            String line;
-            while ((line = in.readLine()) != null && !line.isEmpty()) {
-                if (line.equals("")) {
-                    break;
-                }
+        String line;
+        String boundary = null;
+        while ((line = in.readLine()) != null) {
+            if (line.startsWith("Content-Type: multipart/form-data; boundary=")) {
+                boundary = line.substring("Content-Type: multipart/form-data; boundary=".length());
+                break;
             }
+        }
 
-            ByteArrayOutputStream requestBody = new ByteArrayOutputStream();
-            while ((line = in.readLine()) != null) {
-                if (line.contains("------WebKitFormBoundary")) {
-                    break;
-                }
-                requestBody.write(line.getBytes());
-                requestBody.write("\n".getBytes());
+        if (boundary == null) {
+            sendErrorResponse(out, 400, "Bad Request");
+            return;
+        }
+
+        while ((line = in.readLine()) != null) {
+            if (line.equals("--" + boundary + "--")) {
+                break;
             }
-
-            String[] parts = requestBody.toString().split("------WebKitFormBoundary");
-
-            for (String part : parts) {
-                if (part.trim().isEmpty()) {
-                    continue;
-                }
-
-                String[] lines = part.split("\n");
+            if (line.startsWith("--" + boundary)) {
                 String filename = null;
-                ByteArrayOutputStream fileContent = new ByteArrayOutputStream();
-                boolean readingContent = false;
-                for (String l : lines) {
-                    if (l.startsWith("Content-Disposition:")) {
-                        String[] disposition = l.split("; ");
-                        for (String d : disposition) {
-                            if (d.trim().startsWith("filename=")) {
-                                filename = d.trim().substring("filename=".length()).replaceAll("\"", "");
-                            }
-                        }
-                    } else if (l.equals("")) {
-                        readingContent = true;
-                    } else if (readingContent) {
-                        fileContent.write(l.getBytes());
-                        fileContent.write("\n".getBytes());
+                while ((line = in.readLine()) != null) {
+                    if (line.startsWith("Content-Disposition: form-data; name=\"file\"; filename=\"")) {
+                        filename = line.substring("Content-Disposition: form-data; name=\"file\"; filename=\"".length());
+                        filename = filename.substring(0, filename.length() - 1);
+                        break;
                     }
                 }
 
-                if (filename != null && fileContent.size() > 0) {
-                    saveUploadedFile(filename, fileContent.toByteArray());
+                if (filename == null) {
+                    sendErrorResponse(out, 400, "Bad Request");
+                    return;
                 }
-            }
-            sendSuccessResponse(out);
 
-        } catch (IOException e) {
-            Log.e(TAG, "Error handling POST request: " + e.getMessage());
-            sendErrorResponse(out, 500, "Internal Server Error");
+                while ((line = in.readLine()) != null) {
+                    if (line.trim().length() == 0) {
+                        break;
+                    }
+                }
+
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                while ((line = in.readLine()) != null) {
+                    if (line.startsWith("--" + boundary)) {
+                        break;
+                    }
+                    buffer.write(line.getBytes());
+                }
+
+                saveUploadedFile(filename, buffer.toByteArray());
+            }
         }
+
+        sendSuccessResponse(out);
     }
 
     private void saveUploadedFile(String filename, byte[] data) throws IOException {
-        File file = new File(Environment.getExternalStorageDirectory() + SERVER_ROOT + filename);
+        // Specify the directory path within the public external storage (/Download)
+        File directory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+
+        // Create the directory if it doesn't exist
+        if (!directory.exists()) {
+            if (!directory.mkdirs()) {
+                Log.e(TAG, "Failed to create directory: " + directory.getAbsolutePath());
+                return;
+            }
+        }
+
+        // Create a new file with the specified filename in the directory
+        File file = new File(directory, filename);
+
         try (FileOutputStream fos = new FileOutputStream(file)) {
             fos.write(data);
+            Log.d(TAG, "File uploaded: " + file.getAbsolutePath());
         } catch (IOException e) {
             Log.e(TAG, "Error saving uploaded file: " + e.getMessage());
-            throw e;
+            e.printStackTrace();
         }
     }
-
 
     private void sendSuccessResponse(OutputStream out) throws IOException {
         out.write("HTTP/1.1 200 OK\r\n".getBytes());
@@ -354,7 +345,7 @@ public class  SocketServer extends Thread {
     private void serveFile(OutputStream output, String path) throws IOException {
         try {
             File file;
-            if (path.equals("/camera/stream")) {
+            if (path.equals("/")) {
                 file = new File(Environment.getExternalStorageDirectory() + SERVER_ROOT + DEFAULT_PAGE);
             } else {
                 file = new File(Environment.getExternalStorageDirectory() + SERVER_ROOT + path);

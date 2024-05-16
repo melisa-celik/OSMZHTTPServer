@@ -126,15 +126,6 @@ public class  SocketServer extends Thread {
                 String method = tokens[0];
                 String uri = tokens[1];
 
-//                if (method.equalsIgnoreCase("GET")) {
-//                    if (uri.equals("/camera/stream")) {
-//                        serveMJPEGStream(out);
-//                        return;
-//                    } else {
-//                        serveFile(out, uri);
-//                        return;
-//                    }
-
                 if (method.equalsIgnoreCase("GET")) {
                     File file = new File(Environment.getExternalStorageDirectory(), uri);
                     if (!file.exists()) {
@@ -169,7 +160,6 @@ public class  SocketServer extends Thread {
                 }
             }
 
-            sendErrorResponse(out, 404, "Not Found");
         } catch (IOException e) {
             Log.e(TAG, "Error handling request: " + e.getMessage());
         } finally {
@@ -193,7 +183,6 @@ public class  SocketServer extends Thread {
 
             ByteArrayOutputStream requestBody = new ByteArrayOutputStream();
             while ((line = in.readLine()) != null) {
-                // Check for the boundary to identify the end of each part
                 if (line.contains("------WebKitFormBoundary")) {
                     break;
                 }
@@ -214,7 +203,7 @@ public class  SocketServer extends Thread {
                 boolean readingContent = false;
                 for (String l : lines) {
                     if (l.startsWith("Content-Disposition:")) {
-                        String[] disposition = l.split("; ");
+                        String[] disposition = l.split(" ");
                         for (String d : disposition) {
                             if (d.trim().startsWith("filename=")) {
                                 filename = d.trim().substring("filename=".length()).replaceAll("\"", "");
@@ -232,7 +221,6 @@ public class  SocketServer extends Thread {
                     saveUploadedFile(filename, fileContent.toByteArray());
                 }
             }
-
             sendSuccessResponse(out);
 
         } catch (IOException e) {
@@ -242,7 +230,7 @@ public class  SocketServer extends Thread {
     }
 
     private void saveUploadedFile(String filename, byte[] data) throws IOException {
-        File file = new File("/path/to/destination/" + filename);
+        File file = new File(Environment.getExternalStorageDirectory() + SERVER_ROOT + filename);
         try (FileOutputStream fos = new FileOutputStream(file)) {
             fos.write(data);
         } catch (IOException e) {
@@ -250,6 +238,7 @@ public class  SocketServer extends Thread {
             throw e;
         }
     }
+
 
     private void sendSuccessResponse(OutputStream out) throws IOException {
         out.write("HTTP/1.1 200 OK\r\n".getBytes());
